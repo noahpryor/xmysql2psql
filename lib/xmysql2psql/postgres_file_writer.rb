@@ -31,13 +31,13 @@ EOF
     end
 
     @f << <<-EOF
--- TRUNCATE #{table.name};
-TRUNCATE #{PGconn.quote_ident(table.name)} CASCADE;
+-- TRUNCATE #{'legacy_'+table.name};
+TRUNCATE #{PGconn.quote_ident('legacy_'+table.name)} CASCADE;
 
 EOF
     if serial_key
     @f << <<-EOF
-SELECT pg_catalog.setval(pg_get_serial_sequence('#{table.name}', '#{serial_key}'), #{maxval}, true);
+SELECT pg_catalog.setval(pg_get_serial_sequence('#{'legacy_'+table.name}', '#{serial_key}'), #{maxval}, true);
 EOF
     end
   end
@@ -62,36 +62,36 @@ EOF
       
       @f << <<-EOF
 --
--- Name: #{table.name}_#{serial_key}_seq; Type: SEQUENCE; Schema: public
+-- Name: #{'legacy_'+table.name}_#{serial_key}_seq; Type: SEQUENCE; Schema: public
 --
  
-DROP SEQUENCE IF EXISTS #{table.name}_#{serial_key}_seq CASCADE;
+DROP SEQUENCE IF EXISTS #{'legacy_'+table.name}_#{serial_key}_seq CASCADE;
  
-CREATE SEQUENCE #{table.name}_#{serial_key}_seq
+CREATE SEQUENCE #{'legacy_'+table.name}_#{serial_key}_seq
     INCREMENT BY 1
     NO MAXVALUE
     NO MINVALUE
     CACHE 1;
     
     
-SELECT pg_catalog.setval('#{table.name}_#{serial_key}_seq', #{maxval}, true);
+SELECT pg_catalog.setval('#{'legacy_'+table.name}_#{serial_key}_seq', #{maxval}, true);
  
       EOF
     end
     
     @f << <<-EOF
--- Table: #{table.name}
+-- Table: #{'legacy_'+table.name}
  
--- DROP TABLE #{table.name};
-DROP TABLE IF EXISTS #{PGconn.quote_ident(table.name)} CASCADE;
+-- DROP TABLE #{'legacy_'+table.name};
+DROP TABLE IF EXISTS #{PGconn.quote_ident('legacy_'+table.name)} CASCADE;
  
-CREATE TABLE #{PGconn.quote_ident(table.name)} (
+CREATE TABLE #{PGconn.quote_ident('legacy_'+table.name)} (
 EOF
   
     @f << columns
  
     if primary_index = table.indexes.find {|index| index[:primary]}
-      @f << ",\n  CONSTRAINT #{table.name}_pkey PRIMARY KEY(#{primary_index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")})"
+      @f << ",\n  CONSTRAINT #{'legacy_'+table.name}_pkey PRIMARY KEY(#{primary_index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")})"
     end
     
     @f << <<-EOF
@@ -104,7 +104,7 @@ EOF
       unique = index[:unique] ? "UNIQUE " : nil
       @f << <<-EOF
 DROP INDEX IF EXISTS #{PGconn.quote_ident(index[:name])} CASCADE;
-CREATE #{unique}INDEX #{PGconn.quote_ident(index[:name])} ON #{PGconn.quote_ident(table.name)} (#{index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")});
+CREATE #{unique}INDEX #{PGconn.quote_ident(index[:name])} ON #{PGconn.quote_ident('legacy_'+table.name)} (#{index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")});
 EOF
     end
  
@@ -115,7 +115,7 @@ EOF
   
   def write_constraints(table)
     table.foreign_keys.each do |key|
-      @f << "ALTER TABLE #{PGconn.quote_ident(table.name)} ADD FOREIGN KEY (#{PGconn.quote_ident(key[:column])}) REFERENCES #{PGconn.quote_ident(key[:ref_table])}(#{PGconn.quote_ident(key[:ref_column])});\n"
+      @f << "ALTER TABLE #{PGconn.quote_ident('legacy_'+table.name)} ADD FOREIGN KEY (#{PGconn.quote_ident(key[:column])}) REFERENCES #{PGconn.quote_ident(key[:ref_table])}(#{PGconn.quote_ident(key[:ref_column])});\n"
     end
   end
   
@@ -123,10 +123,10 @@ EOF
   def write_contents(table, reader)
     @f << <<-EOF
 --
--- Data for Name: #{table.name}; Type: TABLE DATA; Schema: public
+-- Data for Name: #{'legacy_'+table.name}; Type: TABLE DATA; Schema: public
 --
 
-COPY "#{table.name}" (#{table.columns.map {|column| PGconn.quote_ident(column[:name])}.join(", ")}) FROM stdin;
+COPY "#{'legacy_'+table.name}" (#{table.columns.map {|column| PGconn.quote_ident(column[:name])}.join(", ")}) FROM stdin;
 EOF
     
     reader.paginated_read(table, 1000) do |row, counter|
@@ -135,7 +135,7 @@ EOF
       @f << row.join("\t") + "\n"
     end
     @f << "\\.\n\n"
-    #@f << "VACUUM FULL ANALYZE #{PGconn.quote_ident(table.name)};\n\n"
+    #@f << "VACUUM FULL ANALYZE #{PGconn.quote_ident('legacy_'+table.name)};\n\n"
   end
   
   def close

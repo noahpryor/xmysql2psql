@@ -38,7 +38,7 @@ class PostgresDbWriter < PostgresWriter
   end
   
   def write_table(table)
-    puts "Creating table #{table.name}..."
+    puts "Creating table #{'legacy_'+table.name}..."
     primary_keys = []
     serial_key = nil
     maxval = nil
@@ -56,42 +56,42 @@ class PostgresDbWriter < PostgresWriter
     
     if serial_key
       if @conn.server_version < 80200
-        serial_key_seq = "#{table.name}_#{serial_key}_seq"
+        serial_key_seq = "#{'legacy_'+table.name}_#{serial_key}_seq"
         @conn.exec("DROP SEQUENCE #{serial_key_seq} CASCADE") if exists?(serial_key_seq)
       else
-        @conn.exec("DROP SEQUENCE IF EXISTS #{table.name}_#{serial_key}_seq CASCADE")
+        @conn.exec("DROP SEQUENCE IF EXISTS #{'legacy_'+table.name}_#{serial_key}_seq CASCADE")
       end
       @conn.exec <<-EOF
-        CREATE SEQUENCE #{table.name}_#{serial_key}_seq
+        CREATE SEQUENCE #{'legacy_'+table.name}_#{serial_key}_seq
         INCREMENT BY 1
         NO MAXVALUE
         NO MINVALUE
         CACHE 1
       EOF
     
-      @conn.exec "SELECT pg_catalog.setval('#{table.name}_#{serial_key}_seq', #{maxval}, true)"
+      @conn.exec "SELECT pg_catalog.setval('#{'legacy_'+table.name}_#{serial_key}_seq', #{maxval}, true)"
     end
     
     if @conn.server_version < 80200
-      @conn.exec "DROP TABLE #{PGconn.quote_ident(table.name)} CASCADE;" if exists?(table.name)
+      @conn.exec "DROP TABLE #{PGconn.quote_ident('legacy_'+table.name)} CASCADE;" if exists?('legacy_'+table.name)
     else
-      @conn.exec "DROP TABLE IF EXISTS #{PGconn.quote_ident(table.name)} CASCADE;"
+      @conn.exec "DROP TABLE IF EXISTS #{PGconn.quote_ident('legacy_'+table.name)} CASCADE;"
     end
-    create_sql = "CREATE TABLE #{PGconn.quote_ident(table.name)} (\n" + columns + "\n)\nWITHOUT OIDS;"
+    create_sql = "CREATE TABLE #{PGconn.quote_ident('legacy_'+table.name)} (\n" + columns + "\n)\nWITHOUT OIDS;"
     begin
       @conn.exec(create_sql)
     rescue Exception => e
       puts "Error: \n#{create_sql}"
       raise
     end
-    puts "Created table #{table.name}"
+    puts "Created table #{'legacy_'+table.name}"
  
   end
   
   def write_indexes(table)
-    puts "Indexing table #{table.name}..."
+    puts "Indexing table #{'legacy_'+table.name}..."
     if primary_index = table.indexes.find {|index| index[:primary]}
-      @conn.exec("ALTER TABLE #{PGconn.quote_ident(table.name)} ADD CONSTRAINT \"#{table.name}_pkey\" PRIMARY KEY(#{primary_index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")})")
+      @conn.exec("ALTER TABLE #{PGconn.quote_ident('legacy_'+table.name)} ADD CONSTRAINT \"#{'legacy_'+table.name}_pkey\" PRIMARY KEY(#{primary_index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")})")
     end
     
     table.indexes.each do |index|
@@ -100,7 +100,7 @@ class PostgresDbWriter < PostgresWriter
       
       #MySQL allows an index name which could be equal to a table name, Postgres doesn't
       indexname = index[:name]
-      if indexname.eql?(table.name)
+      if indexname.eql?('legacy_'+table.name)
         indexnamenew = "#{indexname}_index"
         puts "WARNING: index \"#{indexname}\" equals table name. This is not allowed by postgres and will be renamed to \"#{indexnamenew}\""
         indexname = indexnamenew
@@ -111,12 +111,12 @@ class PostgresDbWriter < PostgresWriter
       else
         @conn.exec("DROP INDEX IF EXISTS #{PGconn.quote_ident(indexname)} CASCADE;")
       end
-      @conn.exec("CREATE #{unique}INDEX #{PGconn.quote_ident(indexname)} ON #{PGconn.quote_ident(table.name)} (#{index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")});")
+      @conn.exec("CREATE #{unique}INDEX #{PGconn.quote_ident(indexname)} ON #{PGconn.quote_ident('legacy_'+table.name)} (#{index[:columns].map {|col| PGconn.quote_ident(col)}.join(", ")});")
     end
     
     
-    #@conn.exec("VACUUM FULL ANALYZE #{PGconn.quote_ident(table.name)}")
-    puts "Indexed table #{table.name}"
+    #@conn.exec("VACUUM FULL ANALYZE #{PGconn.quote_ident('legacy_'+table.name)}")
+    puts "Indexed table #{'legacy_'+table.name}"
   rescue Exception => e
     puts "Couldn't create indexes on #{table} (#{table.indexes.inspect})"
     puts e
@@ -125,7 +125,7 @@ class PostgresDbWriter < PostgresWriter
   
   def write_constraints(table)
     table.foreign_keys.each do |key|
-      key_sql = "ALTER TABLE #{PGconn.quote_ident(table.name)} ADD FOREIGN KEY (#{PGconn.quote_ident(key[:column])}) REFERENCES #{PGconn.quote_ident(key[:ref_table])}(#{PGconn.quote_ident(key[:ref_column])})"
+      key_sql = "ALTER TABLE #{PGconn.quote_ident('legacy_'+table.name)} ADD FOREIGN KEY (#{PGconn.quote_ident(key[:column])}) REFERENCES #{PGconn.quote_ident(key[:ref_table])}(#{PGconn.quote_ident(key[:ref_column])})"
       begin
         @conn.exec(key_sql)
       rescue Exception => e
@@ -144,13 +144,13 @@ class PostgresDbWriter < PostgresWriter
   
   def write_contents(table, reader)
     _time1 = Time.now
-    copy_line = "COPY #{PGconn.quote_ident(table.name)} (#{table.columns.map {|column| PGconn.quote_ident(column[:name])}.join(", ")}) FROM stdin;"
+    copy_line = "COPY #{PGconn.quote_ident('legacy_'+table.name)} (#{table.columns.map {|column| PGconn.quote_ident(column[:name])}.join(", ")}) FROM stdin;"
     @conn.exec(copy_line)
-    puts "Counting rows of #{table.name}... "
+    puts "Counting rows of #{'legacy_'+table.name}... "
     STDOUT.flush
     rowcount = table.count_rows
     puts "Rows counted"
-    puts "Loading #{table.name}..."
+    puts "Loading #{'legacy_'+table.name}..."
     STDOUT.flush
     _counter = reader.paginated_read(table, 1000) do |row, counter|
       line = []
